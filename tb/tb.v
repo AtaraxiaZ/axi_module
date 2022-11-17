@@ -4,15 +4,19 @@ module tb();
 
 localparam DWIDTH = 8;
 
-reg aclk = 'd0;
-reg areset = 'd0;
-wire up_ready, up_valid;
-wire down_ready, down_valid;
-wire last_ready, last_valid;
-reg [DWIDTH-1:0] up_data = 'd0; 
-wire[DWIDTH-1:0] down_data, last_data;
+reg                 aclk        = 'd0;
+reg                 slow_clk    = 'd0;
+reg                 areset      = 'd0;
+reg                 up_valid    = 'd0;
+wire                up_ready;
+wire                down_ready, down_valid;
+wire                last_valid;
+reg                 last_ready  = 'd0;
+reg [DWIDTH-1:0]    up_data     = 'd0; 
+wire[DWIDTH-1:0]    down_data, last_data;
 
-always #5 aclk = ~aclk;
+always #5   aclk = ~aclk;
+always #100 slow_clk = ~slow_clk;
 
 // 产生随机数据
 always @(posedge aclk) begin
@@ -22,33 +26,45 @@ always @(posedge aclk) begin
         up_data <= up_data;
 end
 
+always @(posedge slow_clk) begin
+    up_valid    <= $random();
+end
+
+always @(posedge slow_clk) begin
+    last_ready  <= $random();
+end
+
 initial begin
-    #10
-    // 连续传输情况，无气泡
-    force up_valid = 'd1;
-    force last_ready = 'd1;
-    if(up_ready == 1'b0)
-        $display("Error! Must transfer continuously!");
-    #200
+    areset = 'd1;
+    #100
+    areset = 'd0;
+    #100000
+    // // 连续传输情况，无气泡
+    // up_valid    = 'd1;
+    // last_ready  = 'd1;
+    // if(up_ready == 1'b0)
+    //     $display("Error! Must transfer continuously!");
+    // #200
 
-    // 无有效数据传输情况
-    force up_valid = 'd0;
-    #100
-    force up_valid = 'd1;
-    #100
+    // // 无有效数据传输情况
+    // up_valid = 'd0;
+    // #100
+    // up_valid = 'd1;
+    // #100
 
-    // 反压情况
-    force last_ready = 'd0;
-    #100
-    force last_ready = 'd1;
-    #100
+    // // 反压情况
+    // last_ready = 'd0;
+    // #100
+    // up_valid   = 'd0;
+    // last_ready = 'd1;
+    // #100
 
 
     $finish;
 end
 
 
-axi_module_all #(.DWIDTH(DWIDTH)) master
+axi_module_ready #(.DWIDTH(DWIDTH)) master
 (
     .aclk_i     (aclk),
     .areset_i   (areset),
@@ -60,7 +76,7 @@ axi_module_all #(.DWIDTH(DWIDTH)) master
     .data_i     (up_data)  
 );
 
-axi_module_all #(.DWIDTH(DWIDTH)) slave
+axi_module_ready #(.DWIDTH(DWIDTH)) slave
 (
     .aclk_i     (aclk),
     .areset_i   (areset),

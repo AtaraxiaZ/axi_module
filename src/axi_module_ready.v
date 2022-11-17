@@ -26,8 +26,8 @@ module axi_module_ready #(
 
     // down-stream
     input                   ready_i,
-    output reg              valid_o = 'd0,
-    output reg [DWIDTH-1:0] data_o = 'd0,
+    output                  valid_o,
+    output  [DWIDTH-1:0]    data_o,
 
     // up-stream
     output                  ready_o,
@@ -35,56 +35,42 @@ module axi_module_ready #(
     input  [DWIDTH-1:0]     data_i   
 );
 
-wire input_trig, output_trig;
-reg  ready_i_reg;
-reg  [DWIDTH-1:0] data_temp;
-reg  ready_flag;
+reg [DWIDTH-1:0]    expansion_data_reg;
+reg                 expansion_valid_reg;
+reg                 ready_i_reg;
+reg [DWIDTH-1:0]    data_reg;
+reg                 valid_reg;
 
-assign input_trig   = ready_o & valid_i;
-assign output_trig  = ready_i & valid_o;
-
-assign ready_o = ~valid_o | ready_i_reg;
-
-always @(posedge aclk_i) begin
-    ready_i_reg <= ready_i;
-end
-
-// 出现ready_i_reg = 1，ready_i = 0的处理
-always @(posedge aclk_i) begin
-    if(input_trig && ~ready_i) begin
-        ready_flag  <= 1'b1;
-        data_temp   <= data_i;
-    end
-    else if(ready_i) begin
-        ready_flag  <= 1'b0;
-        data_temp   <= 'd0;
-    end
-end
+// 不再是用之前的~valid_o | ready_i
+assign  ready_o = ~expansion_valid_reg;
+assign  data_o  = expansion_valid_reg ? expansion_data_reg : data_reg;
+// 只要expansion里有valid数据或上游有valid数据，输出就是valid
+assign  valid_o = expansion_valid_reg | valid_reg;
 
 always @(posedge aclk_i) begin
-    if(input_trig && ready_i) begin
-        valid_o <= 1'b1;
-        data_o  <= data_i + 1'b1;            
+    if(areset_i) begin
+        data_reg            <= 'd0;
+        valid_reg           <= 'd0;
+        expansion_data_reg  <= 'd0;
+        expansion_valid_reg <= 'd0;
     end
-    else if(input_trig && ~ready_i) begin
-        data_o  <= data_o;
-        valid_o <= valid_o;
-    end
-    else if(~ready_i_reg && ready_i) begin
-        if(ready_flag) begin
-            data_o  <= data_temp + 1'b1;
-            valid_o <= 1'b1;
+    else begin
+        if(ready_o) begin
+            data_reg    <= data_i + 1'b1;
+            valid_reg     <= valid_i;
+            if(~ready_i) begin
+                expansion_data_reg  <= data_reg;
+                expansion_valid_reg <= valid_reg;
+            end
         end
-        else begin
-            data_o  <= data_i + 1'b1;
-            valid_o <= 1'b1;
-        end
-    end
-    else if(~valid_i)begin
-        valid_o <= 1'b0;
-        data_o  <= data_o;
+        // 当下游准备好接收时，需要清空expansion valid
+        if(ready_i)
+            expansion_valid_reg <= 'd0;
     end
 end
+
+
+
 
 
 
